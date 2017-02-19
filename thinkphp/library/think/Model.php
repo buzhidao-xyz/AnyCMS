@@ -109,7 +109,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
     protected static $initialized = [];
 
     /**
-     * 架构函数
+     * 构造方法
      * @access public
      * @param array|object $data 数据
      */
@@ -508,7 +508,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
                 $value = json_decode($value, true);
                 break;
             case 'array':
-                $value = is_null($value) ? [] : json_decode($value, true);
+                $value = empty($value) ? [] : json_decode($value, true);
                 break;
             case 'object':
                 $value = empty($value) ? new \stdClass() : json_decode($value);
@@ -1081,7 +1081,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
 
         // 删除条件
         $pk = $this->getPk();
-        if (isset($this->data[$pk])) {
+        if (is_string($pk) && isset($this->data[$pk])) {
             $where = [$pk => $this->data[$pk]];
         } elseif (!empty($this->updateWhere)) {
             $where = $this->updateWhere;

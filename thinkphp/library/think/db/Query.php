@@ -451,7 +451,9 @@ class Query
             if (isset($this->options['field'])) {
                 unset($this->options['field']);
             }
-            if ($key && '*' != $field) {
+            if (is_null($field)) {
+                $field = '*';
+            } elseif ($key && '*' != $field) {
                 $field = $key . ',' . $field;
             }
             $pdo = $this->field($field)->getPdo();
@@ -1118,6 +1120,20 @@ class Query
     {
         $this->parseWhereExp($logic, $field, 'exp', $condition);
         return $this;
+    }
+
+    /**
+     * 设置软删除字段及条件
+     * @access public
+     * @param false|string  $field     查询字段
+     * @param mixed         $condition 查询条件
+     * @return $this
+     */
+    public function useSoftDelete($field, $condition = null)
+    {
+        if ($field) {
+            $this->options['soft_delete'] = [$field, $condition ?: ['null', '']];
+        }
     }
 
     /**

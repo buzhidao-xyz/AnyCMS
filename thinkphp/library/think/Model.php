@@ -380,7 +380,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
                 if (empty($param)) {
                     $value = (float) $value;
                 } else {
-                    $value = (float) number_format($value, $param);
+                    $value = (float) number_format($value, $param, '.', '');
                 }
                 break;
             case 'boolean':
@@ -488,7 +488,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
                 if (empty($param)) {
                     $value = (float) $value;
                 } else {
-                    $value = (float) number_format($value, $param);
+                    $value = (float) number_format($value, $param, '.', '');
                 }
                 break;
             case 'boolean':
@@ -779,22 +779,6 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
         return false;
     }
 
-    protected function autoWriteUpdateTime()
-    {
-        // 自动写入更新时间
-        if ($this->autoWriteTimestamp && $this->updateTime && (empty($this->change) || !in_array($this->updateTime, $this->change))) {
-            $this->setAttr($this->updateTime, null);
-        }
-    }
-
-    protected function autoWriteCreateTime()
-    {
-        // 自动写入创建时间
-        if ($this->autoWriteTimestamp && $this->createTime && (empty($this->change) || !in_array($this->createTime, $this->change))) {
-            $this->setAttr($this->createTime, null);
-        }
-    }
-
     /**
      * 保存当前数据对象
      * @access public
@@ -886,10 +870,12 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
                 }
             }
 
-            if (!empty($data)) {
-                $this->autoWriteUpdateTime();
-            } else {
+            if (empty($data) || (count($data) == 1 && is_string($pk) && isset($data[$pk]))) {
+                // 没有更新
                 return 0;
+            } elseif ($this->autoWriteTimestamp && $this->updateTime && !isset($data[$this->updateTime])) {
+                // 自动写入更新时间
+                $data[$this->updateTime] = $this->autoWriteTimestamp($this->updateTime);
             }
 
             if (empty($where) && !empty($this->updateWhere)) {
@@ -938,9 +924,15 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
         } else {
             // 自动写入
             $this->autoCompleteData($this->insert);
-
-            $this->autoWriteCreateTime();
-            $this->autoWriteUpdateTime();
+            // 自动写入创建时间和更新时间
+            if ($this->autoWriteTimestamp) {
+                if ($this->createTime && !isset($this->data[$this->createTime])) {
+                    $this->data[$this->createTime] = $this->autoWriteTimestamp($this->createTime);
+                }
+                if ($this->updateTime && !isset($this->data[$this->updateTime])) {
+                    $this->data[$this->updateTime] = $this->autoWriteTimestamp($this->updateTime);
+                }
+            }
 
             if (false === $this->trigger('before_insert', $this)) {
                 return false;

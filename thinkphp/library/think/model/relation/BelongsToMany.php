@@ -267,7 +267,7 @@ class BelongsToMany extends Relation
                     $data[$result->$pk] = [];
                 }
 
-                $result->setAttr($attr, $this->resultSetBuild($data[$result->$pk]));
+                $result->setRelation($attr, $this->resultSetBuild($data[$result->$pk]));
             }
         }
     }
@@ -293,7 +293,7 @@ class BelongsToMany extends Relation
             if (!isset($data[$pk])) {
                 $data[$pk] = [];
             }
-            $result->setAttr(Loader::parseName($relation), $this->resultSetBuild($data[$pk]));
+            $result->setRelation(Loader::parseName($relation), $this->resultSetBuild($data[$pk]));
         }
     }
 
@@ -504,13 +504,62 @@ class BelongsToMany extends Relation
     }
 
     /**
+     * 数据同步
+     * @param array $ids
+     * @param bool  $detaching
+     * @return array
+     */
+    public function sync($ids, $detaching = true)
+    {
+        $changes = [
+            'attached' => [],
+            'detached' => [],
+            'updated'  => [],
+        ];
+        $pk      = $this->parent->getPk();
+        $current = $this->pivot->where($this->localKey, $this->parent->$pk)
+            ->column($this->foreignKey);
+        $records = [];
+
+        foreach ($ids as $key => $value) {
+            if (!is_array($value)) {
+                $records[$value] = [];
+            } else {
+                $records[$key] = $value;
+            }
+        }
+
+        $detach = array_diff($current, array_keys($records));
+
+        if ($detaching && count($detach) > 0) {
+            $this->detach($detach);
+
+            $changes['detached'] = $detach;
+        }
+
+        foreach ($records as $id => $attributes) {
+            if (!in_array($id, $current)) {
+                $this->attach($id, $attributes);
+                $changes['attached'][] = $id;
+            } elseif (count($attributes) > 0 &&
+                $this->attach($id, $attributes)
+            ) {
+                $changes['updated'][] = $id;
+            }
+        }
+
+        return $changes;
+
+    }
+
+    /**
      * 执行基础查询（进执行一次）
      * @access protected
      * @return void
      */
     protected function baseQuery()
     {
-        if (empty($this->baseQuery)) {
+        if (empty($this->baseQuery) && $this->parent->getData()) {
             $pk    = $this->parent->getPk();
             $table = $this->pivot->getTable();
             $this->query->join($table . ' pivot', 'pivot.' . $this->foreignKey . '=' . $this->query->getTable() . '.' . $this->query->getPk())->where('pivot.' . $this->localKey, $this->parent->$pk);

@@ -176,7 +176,6 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
         // 设置当前模型 确保查询返回模型对象
         $queryClass = $this->query ?: $con->getConfig('query');
         $query      = new $queryClass($con, $this->class);
-        $con->setQuery($query, $this->class);
 
         // 设置当前数据表和模型名
         if (!empty($this->table)) {
@@ -995,7 +994,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
             }
 
             // 模型更新
-            $result = $this->db()->where($where)->update($data);
+            $result = $this->getQuery()->where($where)->update($data);
 
             // 关联更新
             if (isset($relation)) {
@@ -1022,11 +1021,11 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
                 return false;
             }
 
-            $result = $this->db()->insert($this->data);
+            $result = $this->getQuery()->insert($this->data);
 
             // 获取自动增长主键
             if ($result && is_string($pk) && (!isset($this->data[$pk]) || '' == $this->data[$pk])) {
-                $insertId = $this->db()->getLastInsID($sequence);
+                $insertId = $this->getQuery()->getLastInsID($sequence);
                 if ($insertId) {
                     $this->data[$pk] = $insertId;
                 }
@@ -1078,6 +1077,9 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
     public function getChangedData()
     {
         $data = array_udiff_assoc($this->data, $this->origin, function ($a, $b) {
+            if ((empty($b) || empty($b)) && $a !== $b) {
+                return 1;
+            }
             return is_object($a) || $a != $b ? 1 : 0;
         });
 
@@ -1114,7 +1116,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
         }
 
         $result = [];
-        $db     = $this->db();
+        $db     = $this->getQuery();
         $db->startTrans();
         try {
             $pk = $this->getPk();
@@ -1228,7 +1230,7 @@ abstract class Model implements \JsonSerializable, \ArrayAccess
         }
 
         // 删除当前模型数据
-        $result = $this->db()->where($where)->delete();
+        $result = $this->getQuery()->where($where)->delete();
 
         // 关联删除
         if (!empty($this->relationWrite)) {

@@ -1034,7 +1034,7 @@ class Request
             $filter = [];
         } else {
             $filter = $filter ?: $this->filter;
-            if (is_string($filter)) {
+            if (is_string($filter) && false === strpos($filter, '/')) {
                 $filter = explode(',', $filter);
             } else {
                 $filter = (array) $filter;

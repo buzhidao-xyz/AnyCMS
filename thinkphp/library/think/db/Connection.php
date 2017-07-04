@@ -382,10 +382,15 @@ abstract class Connection
             // 返回结果集
             return $this->getResult($pdo, $procedure);
         } catch (\PDOException $e) {
-            if ($this->config['break_reconnect'] && $this->isBreak($e)) {
+            if ($this->isBreak($e)) {
                 return $this->close()->query($sql, $bind, $master, $pdo);
             }
             throw new PDOException($e, $this->config, $this->getLastsql());
+        } catch (\Exception $e) {
+            if ($this->isBreak($e)) {
+                return $this->close()->query($sql, $bind, $master, $pdo);
+            }
+            throw $e;
         }
     }
 
@@ -440,10 +445,15 @@ abstract class Connection
             $this->numRows = $this->PDOStatement->rowCount();
             return $this->numRows;
         } catch (\PDOException $e) {
-            if ($this->config['break_reconnect'] && $this->isBreak($e)) {
+            if ($this->isBreak($e)) {
                 return $this->close()->execute($sql, $bind);
             }
             throw new PDOException($e, $this->config, $this->getLastsql());
+        } catch (\Exception $e) {
+            if ($this->isBreak($e)) {
+                return $this->close()->execute($sql, $bind);
+            }
+            throw $e;
         }
     }
 
@@ -618,13 +628,25 @@ abstract class Connection
         }
 
         ++$this->transTimes;
+        try {
+            if (1 == $this->transTimes) {
+                $this->linkID->beginTransaction();
+            } elseif ($this->transTimes > 1 && $this->supportSavepoint()) {
+                $this->linkID->exec(
+                    $this->parseSavepoint('trans' . $this->transTimes)
+                );
+            }
 
-        if (1 == $this->transTimes) {
-            $this->linkID->beginTransaction();
-        } elseif ($this->transTimes > 1 && $this->supportSavepoint()) {
-            $this->linkID->exec(
-                $this->parseSavepoint('trans' . $this->transTimes)
-            );
+        } catch (\PDOException $e) {
+            if ($this->isBreak($e)) {
+                return $this->close()->startTrans();
+            }
+            throw $e;
+        } catch (\ErrorException $e) {
+            if ($this->isBreak($e)) {
+                return $this->close()->startTrans();
+            }
+            throw $e;
         }
     }
 
@@ -765,6 +787,10 @@ abstract class Connection
      */
     protected function isBreak($e)
     {
+        if (!$this->config['break_reconnect']) {
+            return false;
+        }
+
         $info = [
             'server has gone away',
             'no connection to the server',
@@ -869,7 +895,6 @@ abstract class Connection
                 Debug::remark('queryEndTime', 'time');
                 $runtime = Debug::getRangeTime('queryStartTime', 'queryEndTime');
                 $sql     = $sql ?: $this->getLastsql();
-                $log     = $sql . ' [ RunTime:' . $runtime . 's ]';
                 $result  = [];
                 // SQL性能分析
                 if ($this->config['sql_explain'] && 0 === stripos(trim($sql), 'select')) {
